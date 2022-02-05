@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Distributed;
+using RedisDemo.BackgroundServices;
 using RedisDemo.Repositories;
 using StackExchange.Redis;
 
@@ -11,13 +12,23 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddSingleton<IConnectionMultiplexer>(x =>
+    ConnectionMultiplexer.Connect(builder.Configuration.GetValue<string>("RedisConnection")));
+
 builder.Services.AddStackExchangeRedisCache(option =>
 {
-    option.Configuration = builder.Configuration.GetValue<string>("RedisConnection");
+    option.ConnectionMultiplexerFactory = () =>
+    {
+        var serviceProvider = builder.Services.BuildServiceProvider();
+        var connection = serviceProvider.GetService<IConnectionMultiplexer>();
+        return Task.FromResult(connection);
+    };
 });
 
 builder.Services.AddSingleton<IPersonRepository, PersonRepository>();
 builder.Services.Decorate<IPersonRepository, CachedPersonRepository>();
+
+builder.Services.AddHostedService<RedisSubscriber>();
 
 var app = builder.Build();
 
